@@ -1,0 +1,185 @@
+//-----------------------------
+// Title: Assignment 4
+//-----------------------------
+// Purpose: To develop a heating and cooling system based on the user's desired temperature
+// Dependencies: Assignment4Config
+// Compiler: XC8 V2.46
+// Author: Antonino Balistreri
+// OUTPUTS: Registers 60, 61, 62, 70, 71, 72 and RD1, RD2
+// INPUTS: refTempInput and measuredTempInput
+// Versions:
+//  	V1.0: 03/01/2024 - begin the project
+//  	V1.2: 03/03/2024 - adding call functions
+//	  V1.3: 03/05/2024 - syntax and debugging
+//	  V1.4: 03/06/2034 - final testing and completion
+
+#include "/Users/ninobal04/MPLABXProjects/Assignment4.X/Assignment4Config.inc"
+#include <xc.inc>
+
+;#----------------
+;# PROGRAM INPUTS
+;#----------------
+#define  measuredTempInput 	20 ; this is the input value
+#define  refTempInput 		  15 ; this is the input value
+
+NUME	   EQU	0x15
+QU	     EQU	0x20
+ref_L	   EQU	0x71
+ref_M	   EQU	0x72
+ref_H	   EQU	0x73
+meas_L	 EQU	0x61
+meas_M	 EQU	0x62
+meas_H	 EQU	0x63
+den	     EQU	10
+
+;#----------------
+;# REGISTERS
+;#----------------
+#define  measuredTempREG 	0x20 ; this is the output register
+#define  refTempREG 		  0x21 ; this is the output register
+#define	 contREG		      0x22 
+
+;#----------------
+;# PROGRAM OUTPUTS
+;#----------------
+#define  HEATER      PORTD,1 
+#define  COOLER      PORTD,2
+
+;#----------------
+;# Main Program
+;#----------------
+    PSECT absdata,abs,ovrld
+    
+    ORG	    0x00		    ;Start Program HERE
+    GOTO    INITIAL
+    
+    ORG	    0x20
+    
+INITIAL:
+    MOVLW   0			          ;Clear WREG	    
+    MOVWF   TRISD, 0		    ;Setting Port D as output
+    CALL    REGSET		      ;Setting Registers
+    CALL    ISEQUAL
+    CALL    COMPARE
+
+    
+ISEQUAL:
+    MOVLW   measuredTempInput
+    CPFSEQ  refTempREG
+    RETURN
+    GOTO    EQUAL
+
+COMPARE:
+    CALL    COMPAREGT		    ;Comparing WREG to temp inputs
+    CALL    COMPARELT
+    RETURN
+
+REGSET:
+    MOVLW   0			              ;Clear WREG
+    MOVLW   measuredTempInput
+    MOVWF   measuredTempREG	    ;REG20
+    MOVLW   refTempInput
+    MOVWF   refTempREG		      ;REG21
+    RETURN
+
+COMPAREGT:
+    MOVLW   0			                ;Clear WREG
+    MOVLW   measuredTempInput	    ;Move Measured to WREG
+    CPFSGT  refTempREG		        ;Compare ref register with WREG (<)
+    RETURN			                  ;If FALSE, return to main loop
+    CALL    HEAT		              ;If TRUE, jump to HEAT function
+
+COMPARELT:
+    MOVLW   0			                ;Clear WREG
+    MOVLW   measuredTempInput	    ;Move Measured to WREG
+    CPFSLT  refTempREG		        ;Compare ref register with WREG (>)
+    RETURN			                  ;If FALSE, return to main loop
+    CALL    COOL		              ;If TRUE, jump to COOL function
+        
+HEAT:
+    MOVLW   1
+    MOVWF   contREG, 0		        ;Putting 1 in 0x22
+    BCF	    PORTD, 2		          ;Clearing port d 2
+    BSF     PORTD, 1		          ;Setting port d 1
+    GOTO    HEX2DECMEAS		        ;Jump to hex to decimal conversion (MEASURED)
+
+COOL:
+    MOVLW   0			                ;Clear WREG
+    MOVLW   2			    
+    MOVWF   contREG, 0		        ;Putting 2 in 0x22
+    BCF	    PORTD, 1		          ;Clearing port d 1
+    BSF	    PORTD, 2		          ;Setting port d 2
+    GOTO    HEX2DECMEAS		        ;Jump to hex to decimal conversion (MEASURED)
+    
+EQUAL:
+    MOVLW   0			                ;Clear WREG
+    MOVWF   contREG, 0		        ;Putting 0 in 0x22
+    BCF	    PORTD, 1		          ;Clearing port d 1
+    BCF	    PORTD, 2		          ;Clearing port d 2
+    GOTO    HEX2DECMEAS		        ;Jump to hex to decimal conversion (MEASURED)
+
+HEX2DECMEAS:
+    MOVLW   measuredTempInput	    ;Put measured input in WREG
+    MOVWF   NUME		              ;Put measured input in numerator (0x15)
+    MOVLW   den			              ;Put d'10' in denominator
+    CLRF    QU			              ;Clear quotient
+
+STOREMEAS1:
+    INCF    QU, F		              ;Increment quotient by F
+    SUBWF   NUME		              ;Sub W by numerator (0x15)
+    BC	    STOREMEAS1		        ;Branch if carry
+    ADDWF   NUME		              ;Add WREG to 0x15
+    DECF    QU, F		              ;Decrement quotient by F
+    MOVFF   NUME, meas_M	        ;Send numerator value to 0x61
+    MOVFF   QU, NUME		          ;Send quotiont value to 0x15
+    CLRF    QU			              ;Clear quotient
+ 
+STOREMEAS2:			                  ;Repeat of the code above for the second number 
+    INCF    QU, F		    
+    SUBWF   NUME
+    BC	    STOREMEAS2
+    ADDWF   NUME
+    DECF    QU, F
+    MOVFF   NUME, meas_L	       ;Moves value in 0x15 to 0x62
+    MOVFF   QU, meas_H		       ;Sends quotient to 0x63
+    
+    GOTO    HEX2DECREF		       ;Jump to converting ref input to decimal
+
+HEX2DECREF:			                 ;Repeat of code above but with ref input
+    MOVLW   refTempInput
+    MOVWF   NUME
+    MOVLW   den
+    CLRF    QU
+
+STOREREF1:			                 ;Repeat of code above but with ref input
+    INCF    QU, F
+    SUBWF   NUME
+    BC	    STOREREF1
+    ADDWF   NUME
+    DECF    QU, F
+    MOVFF   NUME, ref_M		       ;Sends numerator value to 0x70
+    MOVFF   QU, NUME
+    CLRF    QU
+ 
+STOREREF2:			                 ;Repeat of code above but with ref input
+    INCF    QU, F
+    SUBWF   NUME
+    BC	    STOREREF2
+    ADDWF   NUME
+    DECF    QU, F
+    MOVFF   NUME, ref_L		     ;Sends numerator value to 0x71
+    MOVFF   QU, ref_H		       ;Sends quotient value to 0x72
+    
+    GOTO    RESETREG		       ;Jump to the reset reg function
+
+RESETREG:
+    MOVLW   0			             ;Clear WREG
+    MOVLW   measuredTempInput
+    MOVWF   measuredTempREG	   ;REG20
+    MOVLW   refTempInput
+    MOVWF   refTempREG		     ;REG21
+    
+    GOTO FIN
+    
+FIN:	   
+    END
