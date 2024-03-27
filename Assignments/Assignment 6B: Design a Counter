@@ -31,8 +31,8 @@
 ; Delay loop parameters
 ;------------------------
 
-INNER	EQU	2
-OUTER	EQU	2
+INNER	EQU	255
+OUTER	EQU	3
 
 ;------------------------
 ; Main Program
@@ -48,14 +48,14 @@ begin:
     CALL    setregs	    ;Puts the HEX code in registers to be calles uding pointers for display
     NOP
     
-loop:
-    CALL    pointreset
-    CALL    compare
-    GOTO    loop
+loop:			    ;Main loop of the program
+    CALL    pointreset	    ;Calls function to reset pointers
+    CALL    compare	    ;Calls function to compare button pushes
+    GOTO    loop	    
 
-pointset:
-    LFSR    0, 0x20
-    LFSR    1, 0x2F
+pointset:		    ;Setting pointers
+    LFSR    0, 0x20	    ;increment
+    LFSR    1, 0x2F	    ;decrement
     RETURN
 
 portbset:		    ;Setting input
@@ -82,16 +82,16 @@ portdset:		    ;Setting output
     MOVWF   TRISD	    
     RETURN
 
-pointreset:
-    MOVLW   0xFF
-    CPFSEQ  INDF0
-    GOTO    nxt1
-    LFSR    0, 0x20
+pointreset:		    ;Resets pointers
+    MOVLW   0xFF	    ;Moves FF into W
+    CPFSEQ  INDF0	    ;Compares W with the current pointer (0) location
+    GOTO    nxt1	    ;Not true = jumo to next pointer compare
+    LFSR    0, 0x20	    ;True = Load FSR for 0 (incrementing)
     nxt1:
-	MOVLW	0xFF
-	CPFSEQ	INDF1
-	GOTO	nxt2
-	LFSR	1, 0x2F
+	MOVLW	0xFF	    
+	CPFSEQ	INDF1	    ;Compares W with the current pointer (1) location
+	GOTO	nxt2	    ;Not true = return
+	LFSR	1, 0x2F	    ;True = Load FSR for F (decrementing)
     nxt2:
 	RETURN	    
 
@@ -151,64 +151,64 @@ setregs:		    ;Puts all displayable values in hex into registers
     MOVLW   0x71	    ;F
     MOVWF   POSTINC0,0
     
-    LFSR    0, 0x20
-    MOVLW   0xFF
-    MOVWF   0x30
-    MOVLW   0xFF
-    MOVWF   0x1F
+    LFSR    0, 0x20	    ;Loads FSR 0
+    MOVLW   0xFF	    ;Moves FF into W
+    MOVWF   0x30	    ;Moves FF into register 30
+    MOVLW   0xFF	    ;moves FF back to W
+    MOVWF   0x1F	    ;Moves FF into register 1F
     RETURN
 
     compare:
-		MOVLW   1
-		CPFSEQ  PORTB
-		GOTO    compare2
-		CALL    INCREMENT
-		GOTO    fin
-    compare2:	MOVLW	2
-		CPFSEQ	PORTB
-		GOTO	compare3
-		CALL	DECREMENT
+		MOVLW   1	    ;First compare value
+		CPFSEQ  PORTB	    ;If button reads true with W
+		GOTO    compare2    ;not true = Moves onto next compare value
+		CALL    INCREMENT   ;true = jump to increment
+		GOTO    fin	    
+    compare2:	MOVLW	2	    ;Second compare value
+		CPFSEQ	PORTB	    ;If button reads true with W
+		GOTO	compare3    ;Not true = move to last compare value
+		CALL	DECREMENT   ;True = jump to decrement
 		GOTO	fin
-    compare3:	MOVLW	3
-		CPFSEQ	PORTB
-		GOTO	fin
-		CALL	resetdisp
+    compare3:	MOVLW	3	    ;Third compare value
+		CPFSEQ	PORTB	    ;If button reads true with W
+		GOTO	fin	    ;Not true = return
+		CALL	resetdisp   ;True = call reset display
     fin:
 RETURN
 
 INCREMENT:		    ;Function to increment the HEX values
-    LFSR    1, 0x2F
+    LFSR    1, 0x2F	    ;Loads FSR pointer for incrementing (0)
     MOVLW   0
-    CPFSEQ  PORTB
-    GOTO    incnotzero
-    CALL    iszero
+    CPFSEQ  PORTB	    ;Compared to see if button not pressed
+    GOTO    incnotzero	    ;Not true = move to increment statement
+    CALL    iszero	    ;True = moves to reset pointer
     RETURN
     incnotzero:
-	MOVFF	POSTINC0, PORTD
-	CALL	delay
+	MOVFF	POSTINC0, PORTD	    ;Moves value from pointer into PORTD then increments
+	CALL	delay		    ;Calls delay function
 RETURN
 
-DECREMENT:
-    LFSR    0, 0x20
+DECREMENT:		    ;Function to decrement the HEX values
+    LFSR    0, 0x20	    ;Loads FSR pointer for decrementing (1)
     MOVLW   0
-    CPFSEQ  PORTB
-    GOTO    decnotzero
-    CALL    iszero
+    CPFSEQ  PORTB	    ;Checks iif button not pressed
+    GOTO    decnotzero	    ;Not true = move to decrement statement
+    CALL    iszero	    ;True = move to reset pointer
     RETURN
     decnotzero:
-	CALL delay
-	MOVFF	POSTDEC1, PORTD
+	CALL delay		    ;Call delay function
+	MOVFF	POSTDEC1, PORTD	    ;Moves value from pointer into PORTD then decrements
 RETURN	
     
 iszero:
-    MOVFF   INDF0, PORTD
-    MOVFF   INDF1, PORTD
+    MOVFF   INDF0, PORTD    ;Takes pointer value (0) and moves to PORTD
+    MOVFF   INDF1, PORTD    ;Takes pointer value (F) and moves to PORTD	    
 RETURN
     
 resetdisp:		    ;Funtion that resets display
-    LFSR    0, 0x20
-    LFSR    0, 0x2F
-    MOVFF   0x20, PORTD
-    CALL    delay
+    LFSR    0, 0x20	    ;Load FSR for 0
+    LFSR    0, 0x2F	    ;Load FSR for F
+    MOVFF   0x20, PORTD	    ;Move 0 into PORTD
+    CALL    delay	    ;Call delay function
     RETURN
 END
