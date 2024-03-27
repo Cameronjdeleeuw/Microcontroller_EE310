@@ -1,0 +1,214 @@
+;---------------------
+; Title: EE310 Assignment 6B
+;---------------------
+; Program Details:
+; The purpose of this program is to take button inputs to count up, down, or reset on 
+; a seven segment display using the PIC Curiosity board based on user input
+    
+; Inputs: RB0-1
+; Outputs: RD0-7
+; Setup: The Curiosity Board (PIC18F47K42)
+
+; Date: Mar 26, 2024
+; File Dependencies: 6Bconfig.inc
+; Compiler: XC8, 2.4
+; Author: Antonino Balistreri
+; Versions:
+;       V1.0: Original code, worked on it till functioning properly
+;
+;------------------
+; Initialization
+;------------------
+#include "/Users/ninobal04/MPLABXProjects/EE310_Assignment_6B.X/6Bconfig.inc"
+#include <xc.inc>
+       
+ 
+    ORG	    0
+    GOTO    begin
+    ORG	    0x20
+
+;------------------------
+; Delay loop parameters
+;------------------------
+
+INNER	EQU	2
+OUTER	EQU	2
+
+;------------------------
+; Main Program
+;------------------------
+	
+PSECT absdata,abs,ovrld 
+	
+begin:
+    CALL    pointset
+    CALL    portdset	    ;Calls function to setup PORTD (RCALL = less memory)
+    CALL    portbset	    ;Calls function to setup PORTD (RCALL = less memory)
+    CALL    resetdisplay
+    CALL    setregs	    ;Puts the HEX code in registers to be calles uding pointers for display
+    NOP
+    
+loop:
+    CALL    pointreset
+    CALL    compare
+    GOTO    loop
+
+pointset:
+    LFSR    0, 0x20
+    LFSR    1, 0x2F
+    RETURN
+
+portbset:		    ;Setting input
+    BANKSEL PORTB
+    CLRF    PORTB
+    BANKSEL LATB
+    CLRF    LATB
+    BANKSEL ANSELB
+    CLRF    ANSELB
+    BANKSEL TRISB
+    MOVLW   0b00000011	    ;Setting last two pins as input
+    MOVWF   TRISB	    
+    RETURN
+
+portdset:		    ;Setting output
+    BANKSEL PORTD
+    CLRF    PORTD
+    BANKSEL LATD
+    CLRF    LATD
+    BANKSEL ANSELD
+    CLRF    ANSELD
+    BANKSEL TRISD
+    MOVLW   0b00000000	    ;Setting PORTD as an output
+    MOVWF   TRISD	    
+    RETURN
+
+pointreset:
+    MOVLW   0xFF
+    CPFSEQ  INDF0
+    GOTO    nxt1
+    LFSR    0, 0x20
+    nxt1:
+	MOVLW	0xFF
+	CPFSEQ	INDF1
+	GOTO	nxt2
+	LFSR	1, 0x2F
+    nxt2:
+	RETURN	    
+
+delay:				;Delay Function
+    MOVLW   INNER		
+    MOVWF   0x10		;Moves 255 into 3 seperate registers
+    MOVWF   0x11
+    MOVWF   0x14
+    MOVLW   OUTER		
+    MOVWF   0x12		;Moves 3 into Register 12
+    delayloop:
+	    DECF    0x10	;Decrements 255
+	    BNZ	    delayloop	;Loops until zero
+	MOVFF	0x14,0x10	;Resets register 10
+	DECF	0x11		;Decrements 255
+	BNZ	delayloop	;Loops until zero
+    MOVFF   0x14,0x11		;Resets register 11
+    DECF    0x12		;Decrements 3
+    BNZ	    delayloop		;Loops until zero
+RETURN
+    
+resetdisplay:
+    MOVFF   0x20, PORTD
+    RETURN
+
+setregs:		    ;Puts all displayable values in hex into registers
+    MOVLW   0x3F	    ;0
+    MOVWF   POSTINC0,0
+    MOVLW   0x06	    ;1
+    MOVWF   POSTINC0,0
+    MOVLW   0x5B	    ;2
+    MOVWF   POSTINC0,0
+    MOVLW   0x4F	    ;3
+    MOVWF   POSTINC0,0
+    MOVLW   0x66	    ;4
+    MOVWF   POSTINC0,0
+    MOVLW   0x6D	    ;5
+    MOVWF   POSTINC0,0
+    MOVLW   0x7D	    ;6
+    MOVWF   POSTINC0,0
+    MOVLW   0x07	    ;7
+    MOVWF   POSTINC0,0
+    MOVLW   0x7F	    ;8
+    MOVWF   POSTINC0,0
+    MOVLW   0x67	    ;9
+    MOVWF   POSTINC0,0
+    MOVLW   0x77	    ;A
+    MOVWF   POSTINC0,0
+    MOVLW   0x7C	    ;B (lowercase to show difference from 8)
+    MOVWF   POSTINC0,0
+    MOVLW   0x39	    ;C
+    MOVWF   POSTINC0,0
+    MOVLW   0x5E	    ;D (lowercase to show difference from 0)
+    MOVWF   POSTINC0,0
+    MOVLW   0x79	    ;E
+    MOVWF   POSTINC0,0
+    MOVLW   0x71	    ;F
+    MOVWF   POSTINC0,0
+    
+    LFSR    0, 0x20
+    MOVLW   0xFF
+    MOVWF   0x30
+    MOVLW   0xFF
+    MOVWF   0x1F
+    RETURN
+
+    compare:
+		MOVLW   1
+		CPFSEQ  PORTB
+		GOTO    compare2
+		CALL    INCREMENT
+		GOTO    fin
+    compare2:	MOVLW	2
+		CPFSEQ	PORTB
+		GOTO	compare3
+		CALL	DECREMENT
+		GOTO	fin
+    compare3:	MOVLW	3
+		CPFSEQ	PORTB
+		GOTO	fin
+		CALL	resetdisp
+    fin:
+RETURN
+
+INCREMENT:		    ;Function to increment the HEX values
+    LFSR    1, 0x2F
+    MOVLW   0
+    CPFSEQ  PORTB
+    GOTO    incnotzero
+    CALL    iszero
+    RETURN
+    incnotzero:
+	MOVFF	POSTINC0, PORTD
+	CALL	delay
+RETURN
+
+DECREMENT:
+    LFSR    0, 0x20
+    MOVLW   0
+    CPFSEQ  PORTB
+    GOTO    decnotzero
+    CALL    iszero
+    RETURN
+    decnotzero:
+	CALL delay
+	MOVFF	POSTDEC1, PORTD
+RETURN	
+    
+iszero:
+    MOVFF   INDF0, PORTD
+    MOVFF   INDF1, PORTD
+RETURN
+    
+resetdisp:		    ;Funtion that resets display
+    LFSR    0, 0x20
+    LFSR    0, 0x2F
+    MOVFF   0x20, PORTD
+    CALL    delay
+    RETURN
+END
