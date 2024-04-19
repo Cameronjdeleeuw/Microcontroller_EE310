@@ -1,0 +1,399 @@
+/*
+ * ---------------------
+ * Title: Programming a Calculator in C
+ * ---------------------
+ * Program Details:
+ *  The purpose of this program is to program a working calculator in c and display on LEDs 
+ * Inputs: RB4-RB7 
+ * Outputs: RD0 - RD7 (output)
+ * Setup: C - Simulator
+ * Date: Apr 17, 2024
+ * File Dependencies / Libraries: It is required to include the 
+ * Configuration Header File 
+ * Software: MPLABX, V6.20
+ * Compiler: XC8, V2.46
+ * Author: Antonino Balistreri
+ * Versions:
+ *      V1.0: Original
+ */
+
+
+// PIC18F46K42 Configuration Bit Settings
+
+// 'C' source line config statements
+
+// CONFIG1L
+#pragma config FEXTOSC = LP     // External Oscillator Selection (LP (crystal oscillator) optimized for 32.768 kHz; PFM set to low power)
+#pragma config RSTOSC = EXTOSC  // Reset Oscillator Selection (EXTOSC operating per FEXTOSC bits (device manufacturing default))
+
+// CONFIG1H
+#pragma config CLKOUTEN = OFF   // Clock out Enable bit (CLKOUT function is disabled)
+#pragma config PR1WAY = ON      // PRLOCKED One-Way Set Enable bit (PRLOCK bit can be cleared and set only once)
+#pragma config CSWEN = ON       // Clock Switch Enable bit (Writing to NOSC and NDIV is allowed)
+#pragma config FCMEN = ON       // Fail-Safe Clock Monitor Enable bit (Fail-Safe Clock Monitor enabled)
+
+// CONFIG2L
+#pragma config MCLRE = EXTMCLR  // MCLR Enable bit (If LVP = 0, MCLR pin is MCLR; If LVP = 1, RE3 pin function is MCLR )
+#pragma config PWRTS = PWRT_OFF // Power-up timer selection bits (PWRT is disabled)
+#pragma config MVECEN = ON      // Multi-vector enable bit (Multi-vector enabled, Vector table used for interrupts)
+#pragma config IVT1WAY = ON     // IVTLOCK bit One-way set enable bit (IVTLOCK bit can be cleared and set only once)
+#pragma config LPBOREN = OFF    // Low Power BOR Enable bit (ULPBOR disabled)
+#pragma config BOREN = SBORDIS  // Brown-out Reset Enable bits (Brown-out Reset enabled , SBOREN bit is ignored)
+
+// CONFIG2H
+#pragma config BORV = VBOR_2P45 // Brown-out Reset Voltage Selection bits (Brown-out Reset Voltage (VBOR) set to 2.45V)
+#pragma config ZCD = OFF        // ZCD Disable bit (ZCD disabled. ZCD can be enabled by setting the ZCDSEN bit of ZCDCON)
+#pragma config PPS1WAY = ON     // PPSLOCK bit One-Way Set Enable bit (PPSLOCK bit can be cleared and set only once; PPS registers remain locked after one clear/set cycle)
+#pragma config STVREN = ON      // Stack Full/Underflow Reset Enable bit (Stack full/underflow will cause Reset)
+#pragma config DEBUG = OFF      // Debugger Enable bit (Background debugger disabled)
+#pragma config XINST = OFF      // Extended Instruction Set Enable bit (Extended Instruction Set and Indexed Addressing Mode disabled)
+
+// CONFIG3L
+#pragma config WDTCPS = WDTCPS_31// WDT Period selection bits (Divider ratio 1:65536; software control of WDTPS)
+#pragma config WDTE = OFF       // WDT operating mode (WDT Disabled; SWDTEN is ignored)
+
+// CONFIG3H
+#pragma config WDTCWS = WDTCWS_7// WDT Window Select bits (window always open (100%); software control; keyed access not required)
+#pragma config WDTCCS = SC      // WDT input clock selector (Software Control)
+
+// CONFIG4L
+#pragma config BBSIZE = BBSIZE_512// Boot Block Size selection bits (Boot Block size is 512 words)
+#pragma config BBEN = OFF       // Boot Block enable bit (Boot block disabled)
+#pragma config SAFEN = OFF      // Storage Area Flash enable bit (SAF disabled)
+#pragma config WRTAPP = OFF     // Application Block write protection bit (Application Block not write protected)
+
+// CONFIG4H
+#pragma config WRTB = OFF       // Boot Block Write Protection bit (Boot Block not write-protected)
+#pragma config WRTC = OFF       // Configuration Register Write Protection bit (Configuration registers not write-protected)
+#pragma config WRTD = OFF       // Data EEPROM Write Protection bit (Data EEPROM not write-protected)
+#pragma config WRTSAF = OFF     // SAF Write protection bit (SAF not Write Protected)
+#pragma config LVP = ON         // Low Voltage Programming Enable bit (Low voltage programming enabled. MCLR/VPP pin function is MCLR. MCLRE configuration bit is ignored)
+
+// CONFIG5L
+#pragma config CP = OFF         // PFM and Data EEPROM Code Protection bit (PFM and Data EEPROM code protection disabled)
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <string.h>
+#include <xc.h>
+
+//* Defining Zero - Nine for later use in program *//
+
+#define     _XTAL_FREQ      4000000
+#define     FCY _XTAL_FREQ/4
+
+#define     zero            0
+#define     one             1
+#define     two             2
+#define     three           3
+#define     four            4
+#define     five            5
+#define     six             6
+#define     seven           7
+#define     eight           8
+#define     nine            9
+#define     star            42      // ASCII equivalent for star key
+#define     pound           35      // ASCII equivalent for pound key
+#define     A               43      // ASCII equivalent for A key
+#define     B               95      // ASCII equivalent for B key
+#define     C               120     // ASCII equivalent for C key
+#define     D               47      // ASCII equivalent for D key      
+
+//* List of Program Functions *//
+
+void    add();
+void    subtract();
+void    multiply();
+void    divide();
+int     keypadinput();
+int     storenum();
+
+//* Define Variables *//
+
+int     x_input_REG = 100;      // REG for X
+int     y_input_REG = 100;      // REG for Y
+int     result_REG = 100;       // REG for result
+char    op_REG = 0;             // REG for add,sub,mult,div
+char    first = 0;              // first digit
+char    second = 0;             // second digit
+char    third = 0;              // third digit
+char    fourth = 0;             // fourth digit
+char    which = 0;              // which digit?
+char    equals = 0;             // equals entered
+int     pushed = 100;           // button being pushed
+int     current = 100;          // the current button
+
+void main (void){
+    //* Setting Up the PORTS *//
+    TRISD  = 0b00000000;
+    PORTD  = 0b00000000;
+    LATD   = 0;
+    ANSELD = 0;
+    TRISB  = 0b11110000;
+    PORTB  = 0b00000000;
+    LATB   = 0;
+    ANSELB = 0;
+    
+    //* Loop to check which function to use based on input from keypad *//
+    while(1){
+        current = keypadinput();
+        storenum(current);
+        
+        if(op_REG == A){            // If the operation register is "A" then add
+            add();
+        }
+        
+        if(op_REG == B){            // If the operation register is "B" then subtract
+            subtract();
+        }
+        
+        if(op_REG == C){            // If the operation register is "C" then multiply
+            multiply();
+        }
+        
+        if(op_REG == D){            // If the operation register is "D" then divide
+            divide();
+        }
+    }
+}
+////////////////////////////////////////////////////////////////////////////////
+////////////* Functions to Add, Subtract, Multiply, and Divide *////////////////                                                                                
+////////////////////////////////////////////////////////////////////////////////
+
+void add(){
+    if(equals == 1){
+        PORTB = result_REG;
+    }
+    while(equals == 0 && y_input_REG != 100){
+        result_REG = x_input_REG + y_input_REG;
+        PORTB = 0b00000010;
+        if(PORTB == 0b00010010){
+            PORTD = result_REG;
+            equals = 1;
+            __delay_ms(250);
+            x_input_REG = 100;
+            y_input_REG = 100;
+            pushed = 0;
+            which = 0;
+        }
+    }
+    return;
+}
+
+void subtract(){
+    if(equals == 1){
+        PORTB = result_REG;
+    }
+    while(equals == 0 && y_input_REG != 100){
+        result_REG = x_input_REG - y_input_REG;
+        PORTB = 0b00000010;
+        if(PORTB = 0b00010010){
+            PORTD = result_REG;
+            equals = 1;
+            __delay_ms(250);
+            x_input_REG = 100;
+            y_input_REG = 100;
+            pushed = 0;
+            which = 0;
+        }
+    }
+    return;
+}
+
+void multiply(){
+    if(equals == 1){
+        PORTB = result_REG;
+    }
+    while(equals == 0 && y_input_REG != 100){
+        result_REG = x_input_REG * y_input_REG;
+        PORTB = 0b00000010;
+        if(PORTB = 0b00010010){
+            PORTD = result_REG;
+            equals = 1;
+            __delay_ms(250);
+            x_input_REG = 100;
+            y_input_REG = 100;
+            pushed = 0;
+            which = 0;
+        }
+    }
+    return;
+}
+
+void divide(){
+    if(equals == 1){
+        PORTB = result_REG;
+    }
+    while(equals == 0 && y_input_REG != 100){
+        result_REG = x_input_REG / y_input_REG;
+        PORTB = 0b00000010;
+        if(PORTB = 0b00010010){
+            PORTD = result_REG;
+            equals = 1;
+            __delay_ms(250);
+            x_input_REG = 100;
+            y_input_REG = 100;
+            pushed = 0;
+            which = 0;
+        }
+    }
+    return;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////////* Function to read the user input from the keypad */////////////////
+////////////////////////////////////////////////////////////////////////////////
+
+int keypadinput()
+{
+    while(1){
+        //* COLUMN ONE OF THE KEYPAD A,B,C,D *//
+        
+        PORTB = 0b00000001;
+        
+        if(PORTB == 0b10000001){
+            pushed = A;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b01000001){
+            pushed = B;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00100001){
+            pushed = C;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00010001){
+            pushed = D;
+            __delay_ms(250);
+            return pushed;
+        }
+        
+        //* COLUMN TWO OF THE KEYPAD 3,6,9,# *//
+        PORTB = 0b00000010;
+        if(PORTB == 0b10000010){
+            pushed = three;
+            which++;                 // Incrementing which digit if this column is pushed
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b01000010){
+            pushed = six;
+            which++;                 // Incrementing which digit if this column is pushed            
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00100010){
+            pushed = nine;
+            which++;                 // Incrementing which digit if this column is pushed
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00010010){
+            pushed = pound;
+            __delay_ms(250);
+            return pushed;
+        }
+        
+        //* COLUMN THREE OF THE KEYPAD 2,5,8,0 *//
+        PORTB = 0b00000100;
+        if(PORTB == 0b10000100){
+            pushed = two;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b01000100){
+            pushed = five;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00100100){
+            pushed = eight;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00010100){
+            pushed = zero;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        
+        //* COLUMN FOUR OF THE KEYPAD 1,4,7,STAR *//
+        PORTB = 0b00001000;
+        if(PORTB == 0b10001000){
+            pushed = one;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b01001000){
+            pushed = four;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        if(PORTB == 0b00101000){
+            pushed = seven;
+            which++;
+            __delay_ms(250);
+            return pushed;
+        }
+        //if(PORTB == 0b00011000){
+        //    pushed = star;
+        //    __delay_ms(250);
+        //    return pushed;
+        
+        return 100;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+////////* Function to store the inputs from the keypad into registers */////////
+////////////////////////////////////////////////////////////////////////////////
+
+int storenum(pushed){
+    if(pushed >= zero && pushed <= nine){
+        //* Column 1,2 *//
+        if(x_input_REG == 100 && which <= 2){
+            if(which == 1){
+                first = pushed;
+                pushed = 100;
+                equals = 0;
+                op_REG = 0;
+            }
+            if(which == 2){
+                second = pushed;
+                x_input_REG = first*10 + second;
+                PORTD = 1;
+                pushed = 100;
+            }
+        }
+        //* Column 3,4 *//
+        if(y_input_REG == 100 && which >= 3){
+            if(which == 3){
+                third = pushed;
+            }
+            if(which == 4){
+                fourth = pushed;
+                y_input_REG = third*10 + fourth;
+                PORTD = 2;
+                pushed = 100;
+            }
+        }
+    }
+    //* When an operation key is pushed *//
+    if(pushed == A || pushed == B || pushed == C || pushed == D){
+        op_REG = pushed;
+        pushed = 100;
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
